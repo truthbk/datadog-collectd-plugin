@@ -50,6 +50,11 @@ def write_callback(vl, data=None):
     if DD_CONFIG['by_dev']:
         tags += [vl.plugin + "_device:" + vl.type_instance]  # or plugin_instance?
     api.Metric.send(metric=metric, points=points, host=vl.host, tags=tags)
+    log_verbose('Sent metric {metric}@{ts} with tags {tags}'.format(
+        metric=metric[1],
+        ts=metric[0],
+        tags=", ".join(tags)
+    ))
 
 
 def log_verbose(msg):
