@@ -11,9 +11,11 @@ DD_CONFIG = None
 
 def configure_callback(conf):
     """Receive configuration block"""
+    global DD_CONFIG
     api_key = None
     tags = None
     tag_by_dev = False
+    dryrun = False
 
     for node in conf.children:
         key = node.key.lower()
@@ -26,42 +28,57 @@ def configure_callback(conf):
             tags = [tok.strip() for tok in val.split(',')]
         elif key == 'tag_by_device':
             tag_by_dev = (val.lower() == "true") or (val.lower == "yes")
+        elif key == 'dryrun':
+            dryrun = (val.lower() == "true") or (val.lower == "yes")
         elif key == 'verbose':
             global VERBOSE_LOGGING
-            VERBOSE_LOGGING = bool(node.values[0]) or VERBOSE_LOGGING
+            VERBOSE_LOGGING = (val.lower() == "true") or (val.lower == "yes") or VERBOSE_LOGGING
         else:
             collectd.warning('datadog plugin: Unknown config key: %s.' % key)
             continue
 
     if api_key:
-        DD_CONFIG = {'api_key': api_key, 'tags': tags, 'by_dev': tag_by_dev}
-        initialize(api_key=DD_CONFIG['api_key'])
+        DD_CONFIG = {'api_key': api_key, 'tags': tags, 'by_dev': tag_by_dev, 'dryrun': dryrun}
+	if not dryrun:
+            initialize(api_key=DD_CONFIG['api_key'])
 
 
 def write_callback(vl, data=None):
+    if not DD_CONFIG:
+        return
+
     if vl.plugin not in SUPPORTED_PLUGINS:
         return
 
     points = []
     metric = vl.plugin + "." + vl.type
+    v_time = float("{0:.2f}".format(vl.time))
     for i in vl.values:
-        points.append((vl.time, i))
-    tags = DD_CONFIG['api_key']
+        points.append((v_time, i))
+
+    tags = list(DD_CONFIG['tags'])
+
     if DD_CONFIG['by_dev']:
-        tags += [vl.plugin + "_device:" + vl.type_instance]  # or plugin_instance?
-    api.Metric.send(metric=metric, points=points, host=vl.host, tags=tags)
-    log_verbose('Sent metric {metric}@{ts} with tags {tags}'.format(
-        metric=metric[1],
-        ts=metric[0],
-        tags=", ".join(tags)
+	if vl.plugin_instance:
+		tags += [vl.plugin + "_device:" + vl.plugin_instance]
+
+    # if not DD_CONFIG['dryrun']:
+    if False:
+        api.Metric.send(metric=metric, points=points, host=vl.host, tags=tags)
+
+    log_verbose('Sent metric {metric}@{ts} with tags {tags} and {points}'.format(
+        metric=metric,
+        ts=v_time,
+        tags=", ".join(tags),
+        points=points
     ))
 
 
 def log_verbose(msg):
     if not VERBOSE_LOGGING:
         return
-    collectd.info('redis plugin [verbose]: %s' % msg)
+    collectd.info('datadog plugin [verbose]: %s' % msg)
 
 # register callbacks
 collectd.register_config(configure_callback)
-collectd.register_read(write_callback)
+collectd.register_write(write_callback)
