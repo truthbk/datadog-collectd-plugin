@@ -3,18 +3,31 @@ import collectd
 # Datadog API
 from datadog import initialize, api
 
-SUPPORTED_PLUGINS = ['snmp']
-
 VERBOSE_LOGGING = False
 DD_CONFIG = None
 
+def dd_dev_tagging(vl, config=None):
+    """Extract tags
+
+    Keyword arguments:
+        vl -- the collectd metric value
+        config -- not really necessary, just conforming to prototype.
+    """
+    tags = []
+
+    if vl and vl.plugin_instance:
+        tags += [vl.plugin + "_device:" + vl.plugin_instance]
+
+    return tags
+
+
+ADV_SUPPORTED_PLUGINS = { 'snmp': dd_tagging }
 
 def configure_callback(conf):
     """Receive configuration block"""
     global DD_CONFIG
     api_key = None
     tags = None
-    tag_by_dev = False
     dryrun = False
 
     for node in conf.children:
@@ -26,8 +39,6 @@ def configure_callback(conf):
             api_key = val
         elif key == 'tags':
             tags = [tok.strip() for tok in val.split(',')]
-        elif key == 'tag_by_device':
-            tag_by_dev = (val.lower() == "true") or (val.lower == "yes")
         elif key == 'dryrun':
             dryrun = (val.lower() == "true") or (val.lower == "yes")
         elif key == 'verbose':
@@ -38,16 +49,13 @@ def configure_callback(conf):
             continue
 
     if api_key:
-        DD_CONFIG = {'api_key': api_key, 'tags': tags, 'by_dev': tag_by_dev, 'dryrun': dryrun}
+        DD_CONFIG = { 'api_key': api_key, 'tags': tags, 'dryrun': dryrun }
 	if not dryrun:
             initialize(api_key=DD_CONFIG['api_key'])
 
 
 def write_callback(vl, data=None):
     if not DD_CONFIG:
-        return
-
-    if vl.plugin not in SUPPORTED_PLUGINS:
         return
 
     points = []
@@ -58,12 +66,10 @@ def write_callback(vl, data=None):
 
     tags = list(DD_CONFIG['tags'])
 
-    if DD_CONFIG['by_dev']:
-	if vl.plugin_instance:
-		tags += [vl.plugin + "_device:" + vl.plugin_instance]
+    if vl.plugin in ADV_SUPPORTED_PLUGINS:
+        tags += ADV_SUPPORTED_PLUGINS[vl.plugin](vl, DD_CONFIG)
 
-    # if not DD_CONFIG['dryrun']:
-    if False:
+    if not DD_CONFIG['dryrun']:
         api.Metric.send(metric=metric, points=points, host=vl.host, tags=tags)
 
     log_verbose('Sent metric {metric}@{ts} with tags {tags} and {points}'.format(
