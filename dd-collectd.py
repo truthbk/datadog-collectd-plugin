@@ -5,6 +5,7 @@ from datadog import initialize, api
 
 VERBOSE_LOGGING = False
 DD_CONFIG = None
+COLLECTD_PREFIX = "collectd"
 
 def dd_dev_tagging(vl, config=None):
     """Extract tags
@@ -59,7 +60,11 @@ def write_callback(vl, data=None):
         return
 
     points = []
-    metric = vl.plugin + "." + vl.type
+    metric = "{prefix}.{plugin}.{metric}".format(
+        prefix=COLLECTD_PREFIX,
+        plugin=vl.plugin,
+        metric=vl.type
+    )
     v_time = float("{0:.2f}".format(vl.time))
     for i in vl.values:
         points.append((v_time, i))
