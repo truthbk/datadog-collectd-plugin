@@ -16,4 +16,4 @@ Multiple module paths may be specified with the collectd python plugin so the lo
 
 Please drop the contents of the provided `dd-collectd.conf` into your `/etc/collectd.conf` file, and restart collectd.
 
-
+If you'd like to learn more about collectd's python plugin head [here](https://collectd.org/wiki/index.php/Plugin:Python).
